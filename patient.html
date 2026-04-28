@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Patient Card</title>
+
+<style>
+body{
+  font-family: Arial;
+  background: linear-gradient(135deg,#e0f7fa,#f1f8ff);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  margin:0;
+}
+
+.card{
+  background:white;
+  width:320px;
+  border-radius:20px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.2);
+  padding:20px;
+  text-align:center;
+  border-top:6px solid #088395;
+}
+
+h2{
+  color:#088395;
+  margin-bottom:20px;
+}
+
+.info{
+  background:#f5f7fa;
+  margin:10px 0;
+  padding:10px;
+  border-radius:10px;
+  font-size:16px;
+}
+
+.label{
+  font-weight:bold;
+  color:#333;
+}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDDPIH_m6h_upBbhigIMatX-dfiyI2oW7Y",
+  authDomain: "q-clinic-e5519.firebaseapp.com",
+  projectId: "q-clinic-e5519",
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// 🔔 طلب الإذن
+if(Notification.permission !== "granted"){
+  Notification.requestPermission();
+}
+</script>
+
+</head>
+
+<body>
+<div class="card">
+  <h2>👤 بطاقة المريض</h2>
+
+  <div class="info">
+    <span class="label">الاسم:</span>
+    <div id="name">...</div>
+  </div>
+
+  <div class="info">
+    <span class="label">الهاتف:</span>
+    <div id="phone">...</div>
+  </div>
+
+  <div class="info">
+    <span class="label">الدور:</span>
+    <div id="position">...</div>
+  </div>
+<div class="info">
+  <span class="label">الوقت:</span>
+  <div id="time"></div>
+</div>
+
+</div>
+
+<script>
+// جلب ID من الرابط
+let id = new URLSearchParams(window.location.search).get("id");
+
+db.collection("patients").doc(id).onSnapshot(doc => {
+  if(doc.exists){
+    let data = doc.data();
+
+    document.getElementById("name").innerText = data.name;
+    document.getElementById("phone").innerText = data.phone;
+    document.getElementById("position").innerText = data.position;
+
+    updateTimeAndNotify(data.position);
+
+  } else {
+    document.body.innerHTML = "❌ المريض غير موجود";
+  }
+});
+let currentPosition = 1;
+
+db.collection("clinic").doc("current").onSnapshot(doc => {
+  currentPosition = doc.data().currentPosition;
+});
+let lastMsg = "";
+function updateTimeAndNotify(myPosition){
+
+  let remaining = myPosition - currentPosition;
+
+  let msg = "";
+
+  if(remaining <= 0){
+    msg = "🟢 دورك الآن";
+  }
+  else if(remaining === 1){
+    msg = "🔔 باقي مريض واحد";
+  }
+  else if(remaining <= 3){
+    msg = "🔔 باقي " + remaining + " مرضى";
+  }
+  else{
+    let minutes = remaining * 25;
+    msg = "⏳ حوالي " + minutes + " دقيقة";
+  }
+
+  document.getElementById("time").innerText = msg;
+// 🔔 إشعار (مرة وحدة فقط)
+  if(msg !== lastMsg && Notification.permission === "granted"){
+    new Notification(msg);
+    lastMsg = msg;
+  }
+
+}
+function getEstimatedTime(position){
+  let startHour = 8;
+  let startMinutes = 0;
+
+  let totalMinutes = (position - 1) * 25;
+
+  let hours = startHour + Math.floor(totalMinutes / 60);
+  let minutes = startMinutes + (totalMinutes % 60);
+
+  if(minutes >= 60){
+    hours += 1;
+    minutes -= 60;
+  }
+
+  return `${hours}:${minutes < 10 ? "0"+minutes : minutes}`;
+}
+</script>
+
+</body>
+</html>

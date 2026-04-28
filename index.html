@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Q-Clinic </title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDDPIH_m6h_upBbhigIMatX-dfiyI2oW7Y",
+  authDomain: "q-clinic-e5519.firebaseapp.com",
+  projectId: "q-clinic-e5519",
+  storageBucket:  "q-clinic-e5519.firebasestorage.app",
+  messagingSenderId:  "314577352574",
+  appId: "1:314577352574:web:aacc55d9a6900af432252f",
+};
+
+// تهيئة Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+</script>
+<style>
+body {
+  font-family: 'Segoe UI', Tahoma;
+  background:#EBF4F6 ;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+}
+
+/* container */
+.container {
+  width: 750px;
+  height: 630px;
+  overflow: hidden;
+  border-radius: 20px;
+  box-shadow: 0 0 30px #06b6d4;
+  background:#071952;
+}
+
+/* wrapper */
+.wrapper {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  transition: 0.6s;
+}
+
+.container.active .wrapper {
+  transform: translateX(-50%);
+}
+
+/* pages */
+.box {
+  width: 50%;
+  padding: 40px;
+  color: white;
+}
+
+.patient {
+  background:#071952;
+}
+
+.doctor {
+  background: linear-gradient(135deg,#088395,#37B7C3);
+  text-align: center;
+}
+
+/* inputs */
+input {
+  width: 60%;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: none;
+  text-align:center;
+
+
+}
+
+/* buttons */
+button {
+  padding: 10px;
+  width: 50%;
+  border: none;
+  border-radius: 10px;
+  background:#088395;
+  color: white;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* list */
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  background: rgba(0,0,0,0.2);
+  margin: 5px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* switch */
+.switch {
+  position: absolute;
+  bottom: 20px;
+  width: 750px;
+  text-align: center;
+}
+
+.switch button {
+  width: auto;
+  padding: 8px 20px;
+  background: #088395;
+}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+</head>
+
+<body>
+
+<div class="container" id="container">
+
+<div class="wrapper">
+
+<!-- 👤 المريض -->
+<div class="box patient">
+
+<h2><center>المريض<center></h2>
+
+<div style="text-align:center;">
+<input id="name" placeholder="الاسم">
+<input id="phone" placeholder="رقم الهاتف">
+
+<button onclick="register()">تسجيل</button>
+<button onclick="addWaiting()">احتياط</button>
+
+<button onclick="getLocation()">موقعي</button>
+
+
+<p id="msg"></p>
+<center><div id="qr"></div></center>
+
+</div>
+</div>
+<!-- 👨‍⚕️ الطبيب -->
+<div class="box doctor">
+
+<!-- 🔐 login -->
+<div id="loginBox">
+<h2>دخول الطبيب</h2>
+
+<input type="password" id="doctorPass" placeholder="الكود السري">
+<button onclick="loginDoctor()">دخول</button>
+
+<p id="error" style="color:red;"></p>
+</div>
+
+<!-- لوحة التحكم -->
+<div id="doctorPanel" style="display:none;">
+
+<h2>لوحة التحكم</h2>
+<!-- معلومات الطبيب -->
+<div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:10px;margin-bottom:10px;">
+<p>👨‍⚕️ dr.ahmed marir</p>
+<p>🩺 marir</p>
+<p>📞 0663773116</p>
+<p>🏥 Q-Clinic</p>
+</div>
+
+<p>عدد المرضى: <span id="count">0</span></p>
+<p>الدور الحالي <span id="current">0</span></p>
+
+<button onclick="nextPatient()">المريض التالي</button>
+<button onclick="logout()">خروج</button>
+
+<ul id="list"></ul>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+<div class="switch">
+<button onclick="toggle()">تبديل</button>
+</div>
+
+<script>
+
+/* تبديل */
+function toggle(){
+  document.getElementById("container").classList.toggle("active");
+}
+
+/* البيانات */
+let queue = [];
+let current=0;
+
+/* تسجيل المريض */
+
+function register(){
+
+  let name = document.getElementById("name").value;
+  let phone = document.getElementById("phone").value;
+
+  if(name === ""){
+    alert("اكتب اسمك");
+    return;
+  }
+
+  let counterRef = db.collection("counter").doc("queue");
+
+  db.runTransaction(async (transaction) => {
+
+    let doc = await transaction.get(counterRef);
+
+    let current = doc.data().value;
+
+    let newPos = Number(current) + 1; // 🔥 مهم
+
+    transaction.update(counterRef, {
+      value: newPos
+    });
+
+    let patientRef = db.collection("patients").doc();
+
+    transaction.set(patientRef, {
+      name: name,
+      phone: phone,
+      position: newPos,
+      time: new Date()
+    });
+
+   return {
+  id: patientRef.id,
+  name: name,
+  phone: phone,
+  position: newPos
+};
+  }).then((result) => {
+
+    document.getElementById("msg").innerText =
+    "رقم الدور: " + result.position;
+
+   let qr = document.getElementById("qr");
+qr.innerHTML = "";
+
+let url = "https://qclinic.github.io/miniproject/patient.html?id=" + result.id;
+
+new QRCode(qr, {
+  text: url,
+  width: 200,
+  height: 200
+});
+
+  });
+
+}
+
+/* تسجيل دخول الطبيب */
+function loginDoctor(){
+
+  let pass = document.getElementById("doctorPass").value;
+  let correctPass ="1234";
+
+  if(pass === correctPass){
+
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("doctorPanel").style.display = "block";
+
+    loadPatients();
+
+    // 🔥 هنا تحطها
+    db.collection("clinic").doc("current").onSnapshot(doc => {
+      let data = doc.data();
+      document.getElementById("current").innerText = data.currentPosition;
+    });
+
+  } else {
+    document.getElementById("error").innerText = "كود خاطئ ❌";
+  }
+
+}
+/* خروج */
+function logout(){
+  document.getElementById("doctorPanel").style.display = "none";
+  document.getElementById("loginBox").style.display = "block";
+}
+
+/* التالي */
+function nextPatient(){
+
+  db.collection("clinic").doc("current").update({
+    currentPosition: firebase.firestore.FieldValue.increment(1)
+  });
+
+}
+function nextPatient(){
+
+  if(queue.length === 0) return;
+
+  let first = queue[0];
+
+  db.collection("patients").doc(first.id).delete();
+
+  db.collection("clinic").doc("current").update({
+    currentPosition: firebase.firestore.FieldValue.increment(1)
+  });
+
+}
+
+function getLocation(){
+
+  if(navigator.geolocation){
+
+    navigator.geolocation.getCurrentPosition((pos)=>{
+
+      let lat = pos.coords.latitude;
+      let lon = pos.coords.longitude;
+
+      alert("موقعك:\n" + lat + " , " + lon);
+
+      // نحفظ الموقع في Firebase (اختياري)
+      db.collection("locations").add({
+        latitude: lat,
+        longitude: lon,
+        time: new Date()
+      });
+
+    }, ()=>{
+      alert("فشل تحديد الموقع ❌");
+    });
+
+  } else {
+    alert("المتصفح لا يدعم GPS");
+  }
+}
+function loadPatients(){
+  db.collection("patients")
+  .orderBy("time","asc")
+  .onSnapshot((snapshot)=>{
+
+    queue = [];
+
+    snapshot.forEach((doc)=>{
+      queue.push({ id: doc.id, ...doc.data() });
+    });
+
+    updateList();
+  });
+}
+
+/* تحديث */
+function updateList(){
+
+  let list = document.getElementById("list");
+  list.innerHTML = "";
+
+  document.getElementById("count").innerText = queue.length;
+queue.forEach((p,index)=>{
+    let li = document.createElement("li");
+    li.innerText = p.position  + " - " + p.name + " - " + p.phone ;
+    list.appendChild(li);
+  });
+
+}
+
+</script>
+
+</body>
+</html>
